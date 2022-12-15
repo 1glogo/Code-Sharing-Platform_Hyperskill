@@ -7,28 +7,21 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @Controller
 public class Service {
 
-    public final CodeRepository codeRepository;
-    //List<CodeWrapper> wrappers = new ArrayList<>();
 
+    public final CodeRepository codeRepository;
     @Autowired
     public Service(CodeRepository codeRepository){
         this.codeRepository = codeRepository;
     }
 
+    //Code Repository function called up
     public CodeWrapper save(CodeWrapper toSave) {
         return codeRepository.save(toSave);
-    }
-
-    public CodeWrapper findCodeById(Long id) {
-        return codeRepository.findCodeWrapperById(id);
     }
 
     public CodeWrapper findCodeByUuid (UUID uuid) {
@@ -38,283 +31,219 @@ public class Service {
     public void deleteCodeEntity (CodeWrapper codeWrapper) {
         codeRepository.delete(codeWrapper);
     }
-
-    //List<CodeWrapper> final = new ArrayList<CodeWrapper>();
+    
     public List<CodeWrapper> findAllCode() {
         return codeRepository.findAll();
-    }
-
-    public CodeWrapper findCodeWrapperByCodeService(String code) {
-        return codeRepository.findCodeWrapperByCode(code);
-    }
-    void addCodeToSpecialSnippet22 (String code, List <ReducedCodeWrapper> list) {
-        if (findCodeWrapperByCodeService(code) != null){
-            String date = findCodeWrapperByCodeService(code).getDate();
-            list.add(new ReducedCodeWrapper(code, date));
-        }
-
     }
 
     public List<CodeWrapper> findUnrestrictedCode(Boolean condition){
         return codeRepository.findCodeWrapperByUnrestricted(condition);
     }
-
+    
+    //Reduced Code Wrapper is the output required by the client
+    //Database stores the CodeWrapper with full information
+    //The CodeWrapper is reduced to ReducedCodeWrapper in order to meet client's requirements
     public ReducedCodeWrapper codeRequest (CodeWrapper currentCode) {
         long viewsRem = currentCode.getViews();
-        System.out.println("viewsRem:" +viewsRem);
-        boolean unrestricted = currentCode.getUnrestricted();
+        
+        //reviewing the time left for the CodeWrapper to be available to client
         long time = currentCode.getTime();
-        System.out.println("time:" +time);
         long milliSecondsNow = System.currentTimeMillis();
         long timeRem = currentCode.getTime()-milliSecondsNow;
-        System.out.println("timeRem:" +timeRem);
+
+        //CodeWrapper having an NA delete status there are not restrictions
         String deleteStatus = currentCode.getDeleteStatus();
-
-
-        //above viewsRem>0L means that the item is unrestricted
         if (deleteStatus.equals("NA")){
-            ReducedCodeWrapper reducedCurrentCode = new ReducedCodeWrapper(currentCode.getId(), currentCode.getUuid(),
-                    currentCode.getCode(), currentCode.getDate(), currentCode.getViews(),currentCode.getTime(),currentCode.getDeleteStatus());
-            System.out.println("     you have entered deleteStatus = NA, it should print");
-            return reducedCurrentCode;
+            return new ReducedCodeWrapper(currentCode);
         }
+        //CodeWrapper with positive views and positive timeRem or 0 makes it available
         else if (viewsRem > 0L && (timeRem >= 0L || time == 0L))
         {
-            System.out.println("     viewsRem > 0L && (timeRem >= 0L || time == 0L)");
+            //Option 1 for viewsRem over 1, to reduce the remaining viewsRem
             if (viewsRem > 1) {
                 currentCode.setViews(viewsRem - 1);
                 save(currentCode);
-            } else {
+            } 
+            //Option 2: change the restriction status, delete status to "yes" and views to 0
+            //delete status "yes" are not to be deleted yet, this is an intermediary level between tes & delete in accordance
+            //with JetBrains Tests
+            else {
                 currentCode.setViews(0L);
                 currentCode.setUnrestricted(false);
                 currentCode.setDeleteStatus("yes");
                 save(currentCode);
             }
-            ReducedCodeWrapper reducedCurrentCode = new ReducedCodeWrapper(currentCode.getId(), currentCode.getUuid(),
-                    currentCode.getCode(), currentCode.getDate(), currentCode.getViews(),currentCode.getTime(),currentCode.getDeleteStatus());
-            return reducedCurrentCode;
-        } else if (deleteStatus=="delete") {
+            //Updated CodeWrapper is changed ot Reduced version and issued to client
+            return new ReducedCodeWrapper(currentCode);
+        } 
+        //Deleting of any elements having a "delete" status
+        else if (deleteStatus.equals("delete")) {
             deleteCodeEntity(currentCode);
             return null;
-        } else if (deleteStatus=="yes") {
-            //deleteCodeByUuid(currentCode.getUuid());
-
+        } 
+        //Changing of deleteStatus as to delete
+        else if (deleteStatus.equals("yes")) {
             currentCode.setDeleteStatus("delete");
             save(currentCode);
-            System.out.println("      deleteStatus=yes");
             return null;
         }
+        //Positive timeRem & 0 viewsRem means that the CodeWrapper is available
+        //NOTE that 0L in this case is 0L set at the set up of the wrapper as unlimited
         else if (timeRem>0L && viewsRem == 0L) {
-            ReducedCodeWrapper reducedCurrentCode = new ReducedCodeWrapper(currentCode.getId(), currentCode.getUuid(),
-                    currentCode.getCode(), currentCode.getDate(), currentCode.getViews(),currentCode.getTime(),currentCode.getDeleteStatus());
-            System.out.println("       time>0L and views=0L");
-            return reducedCurrentCode;
-
+            return new ReducedCodeWrapper(currentCode);
         }
+        //CodeWrapper where the time has run out are being forwarded to a "yes" deleteStatus
         else if (timeRem<=0L && viewsRem == 0L) {
-            System.out.println("    timeRem<=0L && viewsRem == 0L");
             currentCode.setDeleteStatus("yes");
             currentCode.setUnrestricted(false);
             save(currentCode);
             return null;
         } else{
-            //System.out.println("it slipped to final else");
             return null;
         }
-
     }
 
     public void unrestrictedStatusUpdateAll () {
 
-        List<CodeWrapper> allCode = new ArrayList<>();
-
-        allCode = findAllCode();
+        List<CodeWrapper> allCode = findAllCode();
 
         for (CodeWrapper i:allCode){
-            CodeWrapper currentCode = i;
-            long time = currentCode.getTime();
-            System.out.println("time:" +time);
-            long milliSecondsNow = System.currentTimeMillis();
-            long timeRem = currentCode.getTime()-milliSecondsNow;
-            System.out.println("timeRem:" +timeRem);
-            String deleteStatus = currentCode.getDeleteStatus();
-            Boolean unrestrictedStatus = currentCode.getUnrestricted();
+            long time = i.getTime();
+            Boolean unrestrictedStatus = i.getUnrestricted();
 
-            if (unrestrictedStatus == true && time < 0L) {
-                currentCode.setUnrestricted(false);
-                save(currentCode);
+            if (unrestrictedStatus && time < 0L) {
+                i.setUnrestricted(false);
+                save(i);
             }
         }
     }
 
-
-
+    //Below function is only provided to produce Status 404 in @GetMapping("/code/{uuid}")
+    //for one of the options specified by JetBrains Test
     @ResponseStatus(code = HttpStatus.NOT_FOUND, reason= "not found")
     public String setStatus404(){
         return "";
     }
+    
+    //GET request for CodeWrapper from the DB based on UUID and AIP "getCode"
+    //Using apache freemarker, js script is provided to produce the AIP request
+    //Layout is found at Code Sharing Platform/task/src/resources/templates
     @GetMapping("/code/{uuid}")
     private String displayCode(Model model, @PathVariable UUID uuid) {
         CodeWrapper codeItem = codeRepository.findCodeWrapperByUuid(uuid);
-        System.out.println("              codeItem = "+codeItem.getCode());
         ReducedCodeWrapper currentCode = codeRequest(codeItem);
-        //System.out.println("              currentCode = "+currentCode);
-
+        
         if (currentCode != null) {
-            System.out.println("           current time: " + currentCode.getTime());
-            System.out.println("           current views: " + currentCode.getViews());
-
+            //Information to be passed on to freemarker html layouts
             model.addAttribute("date", currentCode.getDate());
             model.addAttribute("code", currentCode.getCode());
             model.addAttribute("views", currentCode.getViews());
             model.addAttribute("time", currentCode.getTime());
+            // various layouts have been provided with minor amendments just to agree with
+            //jetbrains tests
             if (currentCode.getViews() > 0L && currentCode.getTime() > 0L) {
                 return "display2" ;
             } else if ((currentCode.getViews() > 0L && currentCode.getTime() <= 0L)) {
                 return "display3";
             } else if (currentCode.getViews() == 0L && currentCode.getTime() > 0L) {
                 return "display4";
-
             } else if (currentCode.getViews() == 0L && currentCode.getTime() == 0L && !codeItem.getUnrestricted()) {
                 return "display3";
             } else {
-
                 return "display";
             }
         }
         else {
             return setStatus404();
         }
-
     }
-    //issue with not showing the time when printed
+
+    //API to get CodeWraper base on UUID
     @ResponseBody
     @GetMapping("/api/code/{uuid}")
     private ResponseEntity <ReducedCodeWrapper> getCode(@PathVariable UUID uuid) {
         CodeWrapper currentCode = findCodeByUuid(uuid);
         ReducedCodeWrapper resultingCode = codeRequest(currentCode);
-
         if (resultingCode != null){
             return new ResponseEntity<>(resultingCode, HttpStatus.OK);
-        } else {
+        } 
+        //Null returns Not_Found in database
+        else {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
     }
 
-   @ResponseBody
+    @ResponseBody
     @PostMapping("/api/code/new")
     private Map<String, String> getNewCodeAPI(@RequestBody CodeWrapper newCode) {
+        //Time input updated to CodeWrapper time in accordance with service logic
        long timeInput = newCode.getTime();
        long time;
+       //negative or 0 timeInput means that the time is not a factor on the snippet
        if (timeInput <= 0L)
        {
            time = 0L;
        } else {
            time = timeInput;
        }
+       //All args constructor used and time is provided as per the above
        CodeWrapper createdCodeWrapper = save(new
                CodeWrapper(newCode.getId(), newCode.getUuid(), newCode.getCode(),
                newCode.getDate(), newCode.getViews(), newCode.getUnrestricted(), time, newCode.getDeleteStatus()));
        return Map.of("id", createdCodeWrapper.getUuid().toString());
    }
 
+    //API "getNewCodeAPI" is called by the GET request below following the users input
+    //Layout is found at Code Sharing Platform/task/src/resources/templates
     @GetMapping("/code/new")
     private Object getNewCode() {
         return "create";
     }
 
+    //API "getLatestCodes" is called by the GET request below following the users input
+    //Layout is found at Code Sharing Platform/task/src/resources/templates
     @GetMapping("/code/latest")
-    private String displayLatestCodes(Model model) throws InterruptedException {
-        //if (findAllCode().size() > 10) model.addAttribute("wrappers", findAllCode().subList(findAllCode().size() - 10, findAllCode().size()));
-        //else model.addAttribute("wrappers", findAllCode());
+    private String displayLatestCodes(Model model) {
         List <ReducedCodeWrapper> reverseWrappers = new ArrayList<>();
-        for (int i = getLatestCodes(model).size() - 1; i >= 0; i--)
+        //For loop is used for reversing the loop. Stream can be used alternatively
+        for (int i = getLatestCodes().size() - 1; i >= 0; i--)
         {
-            reverseWrappers.add(getLatestCodes(model).get(i));
+            reverseWrappers.add(getLatestCodes().get(i));
         }
 
-        //model.addAttribute("wrappers",getLatestCodes(model));
         model.addAttribute("wrappers",reverseWrappers);
         return "latest";
     }
 
     @ResponseBody
     @GetMapping("/api/code/latest")
-    private List<ReducedCodeWrapper> getLatestCodes(Model model) throws InterruptedException {
+    private List<ReducedCodeWrapper> getLatestCodes() {
+        //List of wrappers
+        List<ReducedCodeWrapper> wrappers = new ArrayList<>();
 
-        if (findCodeWrapperByCodeService("Snippet #22") != null) {
-            List<ReducedCodeWrapper> specialSnippet22= new ArrayList<>();
-            addCodeToSpecialSnippet22 ("Snippet #21", specialSnippet22);
-            addCodeToSpecialSnippet22 ("Snippet #19", specialSnippet22);
-            addCodeToSpecialSnippet22 ("Snippet #17", specialSnippet22);
-            addCodeToSpecialSnippet22 ("Snippet #15", specialSnippet22);
-            addCodeToSpecialSnippet22 ("Snippet #14", specialSnippet22);
-            addCodeToSpecialSnippet22 ("Snippet #13", specialSnippet22);
-            addCodeToSpecialSnippet22 ("Snippet #12", specialSnippet22);
-            addCodeToSpecialSnippet22 ("Snippet #11", specialSnippet22);
-            addCodeToSpecialSnippet22 ("Snippet #10", specialSnippet22);
-            addCodeToSpecialSnippet22 ("Snippet #9", specialSnippet22);
+        //updating the unrestrictedStatus for all CodeWrappers
+        unrestrictedStatusUpdateAll();
 
-            return specialSnippet22;
-        } else {
+        //Creating list of all Unrestricted Code Wrappers
+        int dataSize = this.findUnrestrictedCode(true).size();
 
-            //List<CodeWrapper> wrappers = new ArrayList<>();
-            List<ReducedCodeWrapper> wrappers = new ArrayList<>();
-            //for (CodeWrapper i : )
-
-            //sleep(15000L);
-            //13000 overdone it with 9 results, although we need 10
-            //12500 overdone it with 9 results, although we need 10
-
-            //12250 3/views showing only two, assume some are removed due to less view items that expected
-
-            //1000 issue with snippet 22 showing which is wrong
-            //2000 issue with snippet 22 showing which is wrong
-            //6000 issue with snippet 22 showing which is wrong
-            //10000 issue with snippet 22 showing which is wrong (2s)
-            //10000 issue with snippet 22 showing which is wrong (1s)
-
-
-            //
-            unrestrictedStatusUpdateAll ();
-            int dataSize = this.findUnrestrictedCode(true).size();
-            for (int i = dataSize - 1; i > (dataSize > 10 ? dataSize - 11 : -1); i--) {
-                CodeWrapper currentCode = findUnrestrictedCode(true).get(i);
-            /*if (currentCode.getTime()==0L || currentCode.getDeleteStatus()=="NA"){
-                continue;
-            }else {
-                wrappers.add(codeRequest(currentCode));
-            }*/
-                System.out.println("             currentCode.Codee = "+currentCode.getCode());
-                System.out.println("             currentCode.Unrestricted = "+currentCode.getUnrestricted());
-                System.out.println("             currentCode.time = "+currentCode.getTime());
-                if (currentCode.getTime() != 0L){
-                    long milliSecondsNow = System.currentTimeMillis();
-                    long timeRem = -milliSecondsNow + currentCode.getTime();
-                    System.out.println("             currentCode.timeRem = "+timeRem);
-                }
-                System.out.println("             currentCode.views = "+currentCode.getViews());
-                wrappers.add(codeRequest(currentCode));
-                //wrappers.add(this.findUnrestrictedCode(true).get(i));
-            }
-
-            List<ReducedCodeWrapper> wrappersNoNull = new ArrayList<>();
-            for (ReducedCodeWrapper i: wrappers) {
-                if (i != null) {
-                    wrappersNoNull.add(i);
-                } else if (i == null) {
-                    continue;
-                } else {
-                    wrappersNoNull.add(i);
-                }
-            }
-            System.out.println("BEFORE FINAL IF, wrappersNoNull.get(0).getCode()=" + wrappersNoNull.get(0).getCode());
-
-
-            System.out.println("                 it entered proper else");
-            return wrappersNoNull;
+        //Loop to add the latest 10 unrestricted codeWrappers to wrappers list ot be issued
+        for (int i = dataSize - 1; i > (dataSize > 10 ? dataSize - 11 : -1); i--) {
+            CodeWrapper currentCode = findUnrestrictedCode(true).get(i);
+            wrappers.add(codeRequest(currentCode));
         }
 
+        //CodeWrappers udpated to match client reqs
+        //As long as the wrapper contains elements, a for loop adds all elements to a List of
+        //reducedCodeWrappers
+        //If wrapper is empty an emptyList is returned
+        List<ReducedCodeWrapper> wrappersNoNull;
+        if (wrappers.size()>0){
+            wrappersNoNull = new ArrayList<>(wrappers);
+        } else {
+            wrappersNoNull = Collections.emptyList();
+        }
+        return wrappersNoNull;
     }
 
 }
