@@ -1,0 +1,49 @@
+apply plugin: 'hyperskill'
+
+subprojects {
+    apply plugin: 'application'
+    apply plugin: 'java'
+
+    def userJava = Integer.parseInt(JavaVersion.current().getMajorVersion())
+    def hsJava = Integer.parseInt(hs.java.version)
+
+    compileJava {
+        javaCompiler = javaToolchains.compilerFor {
+            languageVersion = JavaLanguageVersion.of(userJava)
+        }
+    }
+
+
+    repositories {
+        mavenCentral()
+        maven { url "https://packages.jetbrains.team/maven/p/academy/hyperskill-hspc" }
+		maven { url "https://jitpack.io" }
+    }
+
+    configurations.all {
+        resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
+    }
+
+    sourceSets {
+        main.java.srcDir 'src'
+    }
+
+
+    compileJava.options.encoding = 'utf-8'
+    tasks.withType(JavaCompile) {
+        options.encoding = 'utf-8'
+    }
+}
+
+project(':util') {
+    dependencies {
+        implementation 'com.github.hyperskill:hs-test:release-SNAPSHOT'
+    }
+}
+
+configure(subprojects.findAll {it.name != 'util'}) {
+}
+
+wrapper {
+    gradleVersion = hs.gradle.version
+}
