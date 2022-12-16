@@ -9,7 +9,8 @@ For H2 database information and localhost server port see ./Code Sharing Platfor
 No testing file is provided as all testing was part of Jetbrains Hyperskill course.
 
 ## Contact Information: 
-willlogothetis@gmail.com \n
+willlogothetis@gmail.com
+
 Will Logothetis
 
 ## Notes: 
