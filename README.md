@@ -6,6 +6,8 @@ ApacheFreemarker is used to produce web pages and activate RESTFul API (./Code S
 
 For H2 database information and localhost server port see ./Code Sharing Platform/task/src/resources/application.properties.
 
+Code can be found in ./Code Sharing Platform/task/src/platform/.
+
 No testing file is provided as all testing was part of Jetbrains Hyperskill course.
 
 ## Contact Information: 
